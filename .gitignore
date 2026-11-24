@@ -1,0 +1,17 @@
+.idea/
+.vscode/
+.DS_Store
+/bin/
+/build/
+/tmp/
+*.bin
+*.exe
+*.test
+*.out
+*.prof
+coverage.*
+*.zip
+*.tar
+*.gz
+__pycache__/
+*.py[cod]
