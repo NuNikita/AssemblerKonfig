@@ -1,4 +1,4 @@
-// Command assembler translates variant 17 programs into an intermediate representation.
+// Command assembler translates variant 17 programs into binary machine code.
 package main
 
 import (

@@ -1,4 +1,4 @@
-// Package assembler translates the algebraic language of variant 17 into instruction fields.
+// Package assembler translates the algebraic language of variant 17 into instruction fields and machine code.
 package assembler
 
 import "fmt"

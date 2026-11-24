@@ -17,20 +17,18 @@ func TestCLISpecification(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "program.bin")
 	arguments := []string{"-input", "../examples/specification.asm", "-output", output, "-test"}
 	code := cli.Run(arguments, &stdout, &stderr)
-	want, err := os.ReadFile("specification.expected")
+	want, err := os.ReadFile("specification.bytes.expected")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code != cli.Success || stderr.Len() != 0 || stdout.String() != string(want) {
+	if code != cli.Success || stderr.Len() != 0 || stdout.String() != "Размер двоичного файла: 16 байт.\n"+string(want) {
 		t.Fatalf("exit=%d, stdout=%q, stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if _, err := os.Stat(output); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("stage one must not create binary output: %v", err)
-	}
+	assertSpecificationBinary(t, output)
 }
 
-// TestCLIPreservesOutput checks normal-mode reporting and preservation of an existing future binary.
-func TestCLIPreservesOutput(t *testing.T) {
+// TestCLIReplacesOutput checks normal-mode size reporting and replacement of an existing binary.
+func TestCLIReplacesOutput(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "existing.bin")
 	const sentinel = "existing binary content"
 	if err := os.WriteFile(output, []byte(sentinel), 0600); err != nil {
@@ -38,13 +36,10 @@ func TestCLIPreservesOutput(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	code := cli.Run([]string{"-input", "../examples/specification.asm", "-output", output}, &stdout, &stderr)
-	if code != cli.Success || stderr.Len() != 0 || !strings.Contains(stdout.String(), "Разобрано команд: 4.") {
+	if code != cli.Success || stderr.Len() != 0 || stdout.String() != "Размер двоичного файла: 16 байт.\n" {
 		t.Fatalf("exit=%d, stdout=%q, stderr=%q", code, stdout.String(), stderr.String())
 	}
-	content, err := os.ReadFile(output)
-	if err != nil || string(content) != sentinel {
-		t.Fatalf("output modified: content=%q, error=%v", content, err)
-	}
+	assertSpecificationBinary(t, output)
 }
 
 // TestCLIInvalidArguments rejects missing paths, extra arguments, and invalid flags.
@@ -109,7 +104,8 @@ func (failingWriter) Write([]byte) (int, error) {
 func TestCLIOutputFailure(t *testing.T) {
 	for _, mode := range []string{"-test=true", "-test=false"} {
 		var stderr bytes.Buffer
-		arguments := []string{"-input", "../examples/specification.asm", "-output", "unused.bin", mode}
+		output := filepath.Join(t.TempDir(), "program.bin")
+		arguments := []string{"-input", "../examples/specification.asm", "-output", output, mode}
 		code := cli.Run(arguments, failingWriter{}, &stderr)
 		if code != cli.Failure || !strings.Contains(stderr.String(), "write failure") {
 			t.Fatalf("exit=%d, stderr=%q", code, stderr.String())

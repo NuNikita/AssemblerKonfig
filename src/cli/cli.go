@@ -1,4 +1,4 @@
-// Package cli provides the command-line interface for stage one of the assembler.
+// Package cli provides the command-line interface for the variant 17 assembler.
 package cli
 
 import (
@@ -20,7 +20,7 @@ const (
 	Failure = 1
 )
 
-// options holds the input path, future binary path, and diagnostic output mode.
+// options holds the source path, binary path, and diagnostic output mode.
 type options struct {
 	input    string
 	output   string
@@ -49,8 +49,8 @@ func parseOptions(arguments []string, help io.Writer) (options, error) {
 	flags := flag.NewFlagSet("assembler", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&settings.input, "input", "", "путь к исходному файлу")
-	flags.StringVar(&settings.output, "output", "", "путь к будущему двоичному файлу (этап 2)")
-	flags.BoolVar(&settings.testMode, "test", false, "вывести поля промежуточного представления")
+	flags.StringVar(&settings.output, "output", "", "путь к двоичному файлу-результату")
+	flags.BoolVar(&settings.testMode, "test", false, "вывести машинный код в байтовом формате")
 	flags.Usage = func() {}
 	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -79,7 +79,7 @@ func writeHelp(flags *flag.FlagSet, output io.Writer) error {
 	return err
 }
 
-// assemble reads the source and emits stage-one output without opening the future binary path.
+// assemble reuses the stage-one parser, encodes all commands, and saves the binary before reporting success.
 func assemble(settings options, output io.Writer) error {
 	source, err := os.Open(settings.input)
 	if err != nil {
@@ -90,18 +90,31 @@ func assemble(settings options, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return writeProgram(program, settings.testMode, output)
-}
-
-// writeProgram prints either exact instruction fields or a stage-one completion message.
-func writeProgram(program []assembler.Instruction, testMode bool, output io.Writer) error {
-	if !testMode {
-		_, err := fmt.Fprintf(output, "Разобрано команд: %d. Промежуточное представление построено.\n", len(program))
+	code, err := assembler.Encode(program)
+	if err != nil {
 		return err
 	}
-	for _, instruction := range program {
-		if _, err := fmt.Fprintln(output, instruction); err != nil {
-			return fmt.Errorf("вывод промежуточного представления: %w", err)
+	if err := writeBinary(settings.input, settings.output, code); err != nil {
+		return err
+	}
+	return writeProgram(code, settings.testMode, output)
+}
+
+// writeProgram reports the binary size and optionally prints one specification-format line per instruction.
+func writeProgram(code []byte, testMode bool, output io.Writer) error {
+	if _, err := fmt.Fprintf(output, "Размер двоичного файла: %d байт.\n", len(code)); err != nil {
+		return fmt.Errorf("вывод размера файла: %w", err)
+	}
+	if !testMode {
+		return nil
+	}
+	for offset := 0; offset < len(code); offset += assembler.InstructionSize {
+		fields := make([]string, assembler.InstructionSize)
+		for index, value := range code[offset : offset+assembler.InstructionSize] {
+			fields[index] = fmt.Sprintf("0x%02X", value)
+		}
+		if _, err := fmt.Fprintln(output, strings.Join(fields, ", ")); err != nil {
+			return fmt.Errorf("вывод машинного кода: %w", err)
 		}
 	}
 	return nil
